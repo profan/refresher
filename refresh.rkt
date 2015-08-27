@@ -17,6 +17,28 @@
 (define index-file (make-parameter "index.html"))
 (define watched-directory (make-parameter "."))
 
+(command-line
+    #:program "refresher"
+    #:once-each
+    [("-i" "--index-file") file
+                            "HTML index file to serve."
+                            (index-file file)]
+    [("-d" "--directory") dir
+                          "Directory to watch for changes."
+                          (watched-directory dir)])
+
 ; listener
+
+(define (change-listener directory target-thread)
+  (define change-event (filesystem-change-evt directory))
+  (thread-send target-thread #t)
+  (change-listener directory target-thread))
+
 (define (listen index directory)
+
+  #t)
+
+(define (start-listener index directory)
+  (define change-thread (thread (lambda () (change-listener directory (current-thread)))))
+  (define received-event (thread-receive))
   #t)
