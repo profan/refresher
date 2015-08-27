@@ -8,6 +8,7 @@
 
 #lang racket
 
+(require xml)
 (require net/rfc6455)
 (require racket/cmdline)
 (require web-server/servlet
@@ -27,10 +28,18 @@
                           "Directory to watch for changes."
                           (watched-directory dir)])
 
-; listener
+(define (inject-listener in-xml)
+  (define read-xml (read-xml in-xml))
+  (displayln read-xml))
 
+(define (reload-index file-name)
+  (call-with-input-file file-name)
+    (lambda (in) ((inject-listener in))))
+
+; listeners
 (define (change-listener directory target-thread)
   (define change-event (filesystem-change-evt directory))
+  (define change (sync change-event)) ; sync on change - do things when shit happens!
   (thread-send target-thread #t)
   (change-listener directory target-thread))
 
@@ -39,6 +48,12 @@
   #t)
 
 (define (start-listener index directory)
-  (define change-thread (thread (lambda () (change-listener directory (current-thread)))))
-  (define received-event (thread-receive))
-  #t)
+  (define this-thread (current-thread))
+  (define change-thread (thread (lambda () (change-listener directory this-thread))))
+  (define (do-listener)
+    (define received-event (thread-receive))
+    (displayln (format "event: ~s" received-event))
+    (do-listener))
+  (do-listener))
+
+(start-listener (index-file) (watched-directory))
