@@ -68,11 +68,11 @@
   (thread-send target-thread #t)
   (change-listener directory target-thread))
 
-(define (websocket-listener port owner)
-  (thread-send owner (current-thread))
-  (ws-serve #:port port handle-connection))
+(define (websocket-listener port owner-thread)
+  (ws-serve #:port port (curry handle-connection owner-thread)))
 
-(define (handle-connection c state)
+(define (handle-connection owner-thread c state)
+  (thread-send owner-thread (current-thread))
   (define sent-event (sync (thread-receive-evt)))
   (ws-send! c (~a sent-event)))
 
@@ -80,8 +80,8 @@
   (response/xexpr page-content))
 
 (define (start-listener index directory)
-  (set! page-content (reload-index index))
   (define this-thread (current-thread))
+  (set! page-content (reload-index index))
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
   (define servlet-thread (thread (lambda () (serve/servlet page-servlet))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
