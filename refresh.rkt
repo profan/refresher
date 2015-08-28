@@ -17,6 +17,7 @@
 ; constants?
 (define web-port 8000)
 (define ws-port 8001)
+(define wait-time 0.1)
 
 ; global variables
 (define page-content (string->xexpr "<html></html>"))
@@ -58,6 +59,7 @@
   (append xml-structure (list injected-xml)))
 
 (define (reload-index file-name)
+  (sleep wait-time) ; make a retry function instead next
   (call-with-input-file file-name
     (lambda (in) (inject-listener in))))
 
@@ -79,11 +81,16 @@
 (define (page-servlet req)
   (response/xexpr page-content))
 
+(define (do-servlet servlet-func dir)
+  (serve/servlet servlet-func
+                 #:extra-files-paths
+                 (list (build-path (string->path dir)))))
+
 (define (start-listener index directory)
   (define this-thread (current-thread))
   (set! page-content (reload-index index))
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
-  (define servlet-thread (thread (lambda () (serve/servlet page-servlet))))
+  (define servlet-thread (thread (lambda () (do-servlet page-servlet directory))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
   (define client-thread '())
   (define (do-listener)
