@@ -26,6 +26,7 @@
 ; command line arguments config
 (define index-file (make-parameter "index.html"))
 (define watched-directory (make-parameter "."))
+(define resource-directories (make-parameter '()))
 (define command-to-run (command-line
     #:program "refresher"
     #:once-each
@@ -35,6 +36,10 @@
     [("-d" "--directory") dir
                           "Directory to watch for changes."
                           (watched-directory dir)]
+    #:multi
+    [("-r" "--resource-directory") res-dir
+                                   "Directories to add to use for resources."
+                                   (resource-directories (cons res-dir (resource-directories)))]
     #:args (command)
     command))
 
@@ -54,6 +59,9 @@
 (define injected-xml (x:string->xexpr injected-code))
 
 ; utility functions
+(define (neq? a b)
+  (not (eq? a b)))
+
 (define (inject-listener in-xml)
   (define xml-data (h:read-html-as-xml in-xml))
   (define xml-structure (x:xml->xexpr (x:element #f #f 'html '() xml-data)))
@@ -64,9 +72,16 @@
   (call-with-input-file file-name
     (lambda (in) (inject-listener in))))
 
+(define (build-paths paths fallback)
+  (cond
+    [(and (list? paths) (neq? paths '()))
+     (for/list ([p paths])
+       (build-path (string->path p)))]
+    [else fallback]))
+
 ; listeners
 (define (change-listener directory target-thread)
-    (define change-event (filesystem-change-evt directory))
+  (define change-event (filesystem-change-evt directory))
   (define change (sync change-event)) ; sync on change - do things when shit happens!
   (thread-send target-thread #t)
   (change-listener directory target-thread))
@@ -82,17 +97,17 @@
 (define (page-servlet req)
   (response/xexpr page-content))
 
-(define (do-servlet servlet-func dir)
+(define (do-servlet servlet-func index dirs)
   (serve/servlet servlet-func
                  #:servlet-path "/"
                  #:extra-files-paths
-                 (list (build-path (string->path dir)))))
+                 (build-paths dirs `(,(simple-form-path index)))))
 
-(define (start-listener index directory command)
+(define (start-listener index directory res-dirs command)
   (define this-thread (current-thread))
   (set! page-content (reload-index index)) ; initial load of data
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
-  (define servlet-thread (thread (lambda () (do-servlet page-servlet directory))))
+  (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
   (define client-thread '())
   (define (do-listener)
@@ -107,4 +122,4 @@
     (do-listener))
   (do-listener))
 
-(start-listener (index-file) (watched-directory) command-to-run)
+(start-listener (index-file) (watched-directory) (resource-directories) command-to-run)
