@@ -8,7 +8,7 @@
 
 #lang racket
 
-(require xml xml/path)
+(require xml)
 (require net/rfc6455)
 (require racket/cmdline)
 (require web-server/servlet
@@ -88,7 +88,7 @@
 
 (define (start-listener index directory)
   (define this-thread (current-thread))
-  (set! page-content (reload-index index))
+  (set! page-content (reload-index index)) ; initial load of data
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
   (define servlet-thread (thread (lambda () (do-servlet page-servlet directory))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
