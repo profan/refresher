@@ -45,16 +45,16 @@
 
 ; injected code
 (define injected-code 
-  "<script>
+  (format "<script>
   (function() {
-    var ws = new WebSocket(\"ws://localhost:8001\");
+    var ws = new WebSocket(\"ws://localhost:~a\");
 
     ws.onmessage = function(evt) {
       window.location.reload();
     }
 
    })();
-  </script>")
+  </script>" ws-port))
 
 (define injected-xml (x:string->xexpr injected-code))
 
