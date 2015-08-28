@@ -8,7 +8,7 @@
 
 #lang racket
 
-(require xml)
+(require (prefix-in x: xml) (prefix-in h: html))
 (require net/rfc6455)
 (require racket/cmdline)
 (require web-server/servlet
@@ -20,12 +20,23 @@
 (define wait-time 0.1)
 
 ; global variables
-(define page-content (string->xexpr "<html></html>"))
-(permissive-xexprs #t)
+(define page-content (x:string->xexpr "<html></html>"))
+(x:permissive-xexprs #t)
 
 ; command line arguments config
 (define index-file (make-parameter "index.html"))
 (define watched-directory (make-parameter "."))
+(define command-to-run (command-line
+    #:program "refresher"
+    #:once-each
+    [("-i" "--index-file") file
+                            "HTML index file to serve."
+                            (index-file file)]
+    [("-d" "--directory") dir
+                          "Directory to watch for changes."
+                          (watched-directory dir)]
+    #:args (command)
+    command))
 
 ; injected code
 (define injected-code 
@@ -40,22 +51,12 @@
    })();
   </script>")
 
-(define injected-xml (string->xexpr injected-code))
-
-(command-line
-    #:program "refresher"
-    #:once-each
-    [("-i" "--index-file") file
-                            "HTML index file to serve."
-                            (index-file file)]
-    [("-d" "--directory") dir
-                          "Directory to watch for changes."
-                          (watched-directory dir)])
+(define injected-xml (x:string->xexpr injected-code))
 
 ; utility functions
 (define (inject-listener in-xml)
-  (define xml-data (read-xml in-xml))
-  (define xml-structure (xml->xexpr (document-element xml-data)))
+  (define xml-data (h:read-html-as-xml in-xml))
+  (define xml-structure (x:xml->xexpr (x:element #f #f 'html '() xml-data)))
   (append xml-structure (list injected-xml)))
 
 (define (reload-index file-name)
@@ -83,10 +84,11 @@
 
 (define (do-servlet servlet-func dir)
   (serve/servlet servlet-func
+                 #:servlet-path "/"
                  #:extra-files-paths
                  (list (build-path (string->path dir)))))
 
-(define (start-listener index directory)
+(define (start-listener index directory command)
   (define this-thread (current-thread))
   (set! page-content (reload-index index)) ; initial load of data
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
@@ -101,7 +103,8 @@
       (displayln (format "listener got event: ~s" received-event))
       (thread-send client-thread received-event)
       (set! page-content (reload-index index))])
+      (system command) ; execute command, since change happened
     (do-listener))
   (do-listener))
 
-(start-listener (index-file) (watched-directory))
+(start-listener (index-file) (watched-directory) command-to-run)
