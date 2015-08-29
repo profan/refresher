@@ -2,6 +2,11 @@ Refresher
 ===============
 Monitors your file-system and hosts a web-page which refreshes when a file-system change is detected, uses WebSocket for this communication. Was built primarily to help ease the workflow when working with luxe.
 
+Requirements
+---------------
+ * Racket
+ * rfc6455 - can be fetched through raco pkg
+
 Program Flags:
 --------------------
  * The ``-i`` flag specifies what index to serve and inject code into, defaults to index.html in current directory.
