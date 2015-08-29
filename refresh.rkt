@@ -110,16 +110,17 @@
   (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
   (define client-thread '())
-  (define (do-listener)
+  (define (do-listener last-event-time)
     (define received-event (thread-receive))
     (cond
       [(thread? received-event) (set! client-thread received-event)]
-      [(thread? client-thread)
+      [(and (thread? client-thread) (> (- (current-seconds) last-event-time) 5))
       (displayln (format "listener got event: ~s" received-event))
       (thread-send client-thread received-event)
-      (set! page-content (reload-index index))])
-      (system command) ; execute command, since change happened
-    (do-listener))
-  (do-listener))
+      (set! page-content (reload-index index))
+      (system command)
+      (do-listener (current-seconds))]); execute command, since change happened]
+    (do-listener last-event-time))
+  (do-listener (current-seconds)))
 
 (start-listener (index-file) (watched-directory) (resource-directories) command-to-run)
