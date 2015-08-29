@@ -117,8 +117,8 @@
       [(and (thread? client-thread) (> (- (current-seconds) last-event-time) 5))
       (displayln (format "listener got event: ~s" received-event))
       (thread-send client-thread received-event)
-      (set! page-content (reload-index index))
       (system command)
+      (set! page-content (reload-index index))
       (do-listener (current-seconds))]); execute command, since change happened]
     (do-listener last-event-time))
   (do-listener (current-seconds)))
