@@ -46,14 +46,32 @@
 ; injected code
 (define injected-code 
   (format "<script>
-  (function() {
-    var ws = new WebSocket(\"ws://localhost:~a\");
+
+  function setUpWebSocket() {
+
+    var host = \"ws://localhost:~a\";
+    var time_between_reconnect = 1000;
+    var ws = new WebSocket(host);
+
+    ws.onopen = function(evt) {
+      console.log(\"Connection established to notifier at: \" + host);
+    }
 
     ws.onmessage = function(evt) {
       window.location.reload();
     }
 
-   })();
+    ws.onclose = function(evt) {
+      setTimeout(function() {
+        console.log(\"Connection lost to notifier, attempting to reconnect!\");
+       setUpWebSocket();
+      }, time_between_reconnect);
+    }
+
+   }
+
+  setUpWebSocket();
+
   </script>" ws-port))
 
 (define injected-xml (x:string->xexpr injected-code))
