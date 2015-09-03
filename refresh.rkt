@@ -64,7 +64,7 @@
     ws.onclose = function(evt) {
       setTimeout(function() {
         console.log(\"Connection lost to notifier, attempting to reconnect!\");
-       setUpWebSocket();
+        setUpWebSocket();
       }, time_between_reconnect);
     }
 
@@ -134,9 +134,9 @@
       [(thread? received-event) (set! client-thread received-event)]
       [(and (thread? client-thread) (> (- (current-seconds) last-event-time) 5))
       (displayln (format "listener got event: ~s" received-event))
-      (thread-send client-thread received-event)
       (system command)
       (set! page-content (reload-index index))
+      (thread-send client-thread received-event)
       (do-listener (current-seconds))]); execute command, since change happened]
     (do-listener last-event-time))
   (do-listener (current-seconds)))
