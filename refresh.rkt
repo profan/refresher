@@ -27,9 +27,12 @@
 (define index-file (make-parameter "index.html"))
 (define watched-directory (make-parameter "."))
 (define resource-directories (make-parameter '()))
+(define open-on-start? (make-parameter #f))
 (define command-to-run (command-line
     #:program "refresher"
     #:once-each
+    [("-l" "--launch-browser") "Open the page in your browser automatically on startup (default is no)"
+                                (open-on-start? #t)]
     [("-i" "--index-file") file
                             "HTML index file to serve."
                             (index-file file)]
@@ -115,17 +118,18 @@
 (define (page-servlet req)
   (response/xexpr page-content))
 
-(define (do-servlet servlet-func index dirs)
+(define (do-servlet servlet-func index dirs launch?)
   (serve/servlet servlet-func
+                 #:command-line? (not launch?)
                  #:servlet-path "/"
                  #:extra-files-paths
                  (build-paths dirs `(,(simple-form-path index)))))
 
-(define (start-listener index directory res-dirs command)
+(define (start-listener index directory res-dirs command launch-browser?)
   (define this-thread (current-thread))
   (set! page-content (reload-index index)) ; initial load of data
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
-  (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs))))
+  (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs launch-browser?))))
   (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
   (define client-thread '())
   (define (do-listener last-event-time)
@@ -141,4 +145,4 @@
     (do-listener last-event-time))
   (do-listener (current-seconds)))
 
-(start-listener (index-file) (watched-directory) (resource-directories) command-to-run)
+(start-listener (index-file) (watched-directory) (resource-directories) command-to-run (open-on-start?))
