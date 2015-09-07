@@ -10,17 +10,22 @@
 
 (require (prefix-in x: xml) (prefix-in h: html))
 (require net/rfc6455)
+(require racket/date)
 (require racket/cmdline)
 (require web-server/servlet
          web-server/servlet-env)
 
-; constants?
+; server variables
 (define web-port 8000)
 (define ws-port 8001)
-(define wait-time 0.1)
+(define reload-wait-time 0.1) ; seconds
+
+; client variables
+(define reconnect-wait-time 1000) ; milliseconds
 
 ; global variables
 (define page-content (x:string->xexpr "<html></html>"))
+(date-display-format 'rfc2822)
 (x:permissive-xexprs #t)
 
 ; command line arguments config
@@ -53,7 +58,7 @@
   function setUpWebSocket() {
 
     var host = \"ws://localhost:~a\";
-    var time_between_reconnect = 1000;
+    var time_between_reconnect = ~a;
     var ws = new WebSocket(host);
 
     ws.onopen = function(evt) {
@@ -75,7 +80,7 @@
 
   setUpWebSocket();
 
-  </script>" ws-port))
+  </script>" ws-port reconnect-wait-time))
 
 (define injected-xml (x:string->xexpr injected-code))
 
@@ -89,7 +94,7 @@
   (append xml-structure (list injected-xml)))
 
 (define (reload-index file-name)
-  (sleep wait-time) ; make a retry function instead next
+  (sleep reload-wait-time) ; make a retry function instead next
   (call-with-input-file file-name
     (lambda (in) (inject-listener in))))
 
@@ -120,7 +125,7 @@
 
 (define (do-servlet servlet-func index dirs launch?)
   (serve/servlet servlet-func
-                 #:command-line? (not launch?)
+                 #:launch-browser? launch?
                  #:servlet-path "/"
                  #:extra-files-paths
                  (build-paths dirs `(,(simple-form-path index)))))
@@ -137,7 +142,7 @@
     (cond
       [(thread? received-event) (set! client-thread received-event)]
       [(and (thread? client-thread) (> (- (current-seconds) last-event-time) 5))
-      (displayln (format "listener got event: ~s" received-event))
+      (log-thing (format "listener got event: ~s" received-event))
       (system command)
       (set! page-content (reload-index index))
       (thread-send client-thread received-event)
@@ -145,4 +150,14 @@
     (do-listener last-event-time))
   (do-listener (current-seconds)))
 
+(define (current-date->string)
+  (date->string (current-date) #t))
+
+(define (get-address protocol port)
+  (format "~a://localhost:~a" protocol port))
+
+(define (log-thing thing)
+  (displayln (format "[~a] ~a" (current-date->string) thing)))
+
+(log-thing (format "started refresher, web at: ~a, ws at: ~a" (get-address 'http web-port) (get-address 'ws ws-port)))
 (start-listener (index-file) (watched-directory) (resource-directories) command-to-run (open-on-start?))
