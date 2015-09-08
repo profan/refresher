@@ -88,6 +88,15 @@
 (define (neq? a b)
   (not (eq? a b)))
 
+(define (current-date->string)
+  (date->string (current-date) #t))
+
+(define (get-address protocol port)
+  (format "~a://localhost:~a" protocol port))
+
+(define (log-thing thing)
+  (displayln (format "[~a] ~a" (current-date->string) thing)))
+
 (define (inject-listener in-xml)
   (define xml-data (h:read-html-as-xml in-xml))
   (define xml-structure (x:xml->xexpr (x:element #f #f 'html '() xml-data)))
@@ -149,15 +158,6 @@
       (do-listener (current-seconds))]); execute command, since change happened]
     (do-listener last-event-time))
   (do-listener (current-seconds)))
-
-(define (current-date->string)
-  (date->string (current-date) #t))
-
-(define (get-address protocol port)
-  (format "~a://localhost:~a" protocol port))
-
-(define (log-thing thing)
-  (displayln (format "[~a] ~a" (current-date->string) thing)))
 
 (log-thing (format "started refresher, web at: ~a, ws at: ~a" (get-address 'http web-port) (get-address 'ws ws-port)))
 (start-listener (index-file) (watched-directory) (resource-directories) command-to-run (open-on-start?))
