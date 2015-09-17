@@ -6,14 +6,22 @@
 ;
 ;   requires: rfc6455 - websocket library
 
-#lang racket
+#lang racket/base
 
-(require (prefix-in x: xml) (prefix-in h: html))
 (require net/rfc6455)
-(require racket/date)
-(require racket/cmdline)
-(require web-server/servlet
-         web-server/servlet-env)
+(require 
+  (prefix-in x: xml)
+  (prefix-in h: html))
+(require
+  web-server/servlet
+  web-server/servlet-env)
+(require
+  racket/date
+  racket/cmdline
+  racket/function
+  racket/format
+  racket/path
+  racket/system)
 
 ; server variables
 (define web-port 8000)
@@ -32,6 +40,7 @@
 (define index-file (make-parameter "index.html"))
 (define watched-directory (make-parameter "."))
 (define resource-directories (make-parameter '()))
+(define watching-pattern (make-parameter #px"."))
 (define open-on-start? (make-parameter #f))
 (define command-to-run (command-line
     #:program "refresher"
@@ -44,6 +53,9 @@
     [("-d" "--directory") dir
                           "Directory to watch for changes."
                           (watched-directory dir)]
+    [("-p" "--pattern") pattern
+                        "Pattern to use for matching files (only used if platform supports file-watching)."
+                        (watching-pattern (pregexp pattern))]
     #:multi
     [("-r" "--resource-directory") res-dir
                                    "Directories to add to use for resources."
@@ -114,6 +126,12 @@
        (build-path (string->path p)))]
     [else fallback]))
 
+(define (create-listeners dir pat)
+  (define filtered-items 
+    (filter (lambda (element) (regexp-match? pat element)) (in-directory dir)))
+  #t
+  )
+
 ; listeners
 (define (change-listener directory target-thread)
   (define change-event (filesystem-change-evt directory))
@@ -144,7 +162,7 @@
   (set! page-content (reload-index index)) ; initial load of data
   (define change-thread (thread (lambda () (change-listener directory this-thread))))
   (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs launch-browser?))))
-  (define websocket-thread (thread (lambda() (websocket-listener ws-port this-thread))))
+  (define websocket-thread (thread (lambda () (websocket-listener ws-port this-thread))))
   (define client-thread '())
   (define (do-listener last-event-time)
     (define received-event (thread-receive))
