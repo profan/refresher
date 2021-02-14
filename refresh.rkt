@@ -168,7 +168,7 @@
   (define servlet-thread
     (thread (lambda () (do-servlet page-servlet index res-dirs launch-browser?))))
   (define websocket-thread
-    (thread (lambda () (websocket-listener ws-port this-thread))))
+    (thread (lambda () (websocket-listener *ws-port* this-thread))))
   (define client-thread '())
 
   (define (do-listener last-event-time)
