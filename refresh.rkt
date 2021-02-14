@@ -9,12 +9,15 @@
 #lang racket/base
 
 (require net/rfc6455)
+
 (require 
   (prefix-in x: xml)
   (prefix-in h: html))
+  
 (require
   web-server/servlet
   web-server/servlet-env)
+  
 (require
   racket/date
   racket/cmdline
@@ -24,12 +27,13 @@
   racket/system)
 
 ; server variables
-(define web-port 8000)
-(define ws-port 8001)
-(define reload-wait-time 0.1) ; seconds
+(define *web-port* 8000)
+(define *ws-port* 8001)
+(define *reload-wait-time* 0.1) ; seconds
+(define *reload-delay-ms* 250) ; milliseconds
 
 ; client variables
-(define reconnect-wait-time 1000) ; milliseconds
+(define *reconnect-wait-time* 250) ; milliseconds
 
 ; global variables
 (define page-content (x:string->xexpr "<html></html>"))
@@ -92,7 +96,7 @@
 
   setUpWebSocket();
 
-  </script>" ws-port reconnect-wait-time))
+  </script>" *ws-port* *reconnect-wait-time*))
 
 (define injected-xml (x:string->xexpr injected-code))
 
@@ -115,7 +119,7 @@
   (append xml-structure (list injected-xml)))
 
 (define (reload-index file-name)
-  (sleep reload-wait-time) ; make a retry function instead next
+  (sleep *reload-wait-time*) ; make a retry function instead next
   (call-with-input-file file-name
     (lambda (in) (inject-listener in))))
 
@@ -125,12 +129,6 @@
      (for/list ([p paths])
        (build-path (string->path p)))]
     [else fallback]))
-
-(define (create-listeners dir pat)
-  (define filtered-items 
-    (filter (lambda (element) (regexp-match? pat element)) (in-directory dir)))
-  #t
-  )
 
 ; listeners
 (define (change-listener directory target-thread)
@@ -157,25 +155,42 @@
                  #:extra-files-paths
                  (build-paths dirs `(,(simple-form-path index)))))
 
+(define (current-timestamp)
+  (current-inexact-milliseconds))
+
 (define (start-listener index directory res-dirs command launch-browser?)
+
   (define this-thread (current-thread))
   (set! page-content (reload-index index)) ; initial load of data
-  (define change-thread (thread (lambda () (change-listener directory this-thread))))
-  (define servlet-thread (thread (lambda () (do-servlet page-servlet index res-dirs launch-browser?))))
-  (define websocket-thread (thread (lambda () (websocket-listener ws-port this-thread))))
+
+  (define change-thread
+    (thread (lambda () (change-listener directory this-thread))))
+  (define servlet-thread
+    (thread (lambda () (do-servlet page-servlet index res-dirs launch-browser?))))
+  (define websocket-thread
+    (thread (lambda () (websocket-listener ws-port this-thread))))
   (define client-thread '())
+
   (define (do-listener last-event-time)
     (define received-event (thread-receive))
     (cond
-      [(thread? received-event) (set! client-thread received-event)]
-      [(and (thread? client-thread) (> (- (current-seconds) last-event-time) 5))
+      [(thread? received-event)
+      (set! client-thread received-event)]
+      [(and
+        (thread? client-thread)
+        (> (- (current-timestamp) last-event-time) *reload-delay-ms*))
       (log-thing (format "listener got event: ~s" received-event))
       (system command)
       (set! page-content (reload-index index))
       (thread-send client-thread received-event)
-      (do-listener (current-seconds))]); execute command, since change happened]
+      (do-listener (current-timestamp))]) ; execute command, since change happened
     (do-listener last-event-time))
-  (do-listener (current-seconds)))
+  (do-listener (current-timestamp)))
 
-(log-thing (format "started refresher, web at: ~a, ws at: ~a" (get-address 'http web-port) (get-address 'ws ws-port)))
+(log-thing
+  (format "started refresher, web at: ~a, ws at: ~a"
+    (get-address 'http *web-port*)
+    (get-address 'ws *ws-port*)))
+
+; it goes zoom
 (start-listener (index-file) (watched-directory) (resource-directories) command-to-run (open-on-start?))
